@@ -37,6 +37,9 @@ revision: ## Create a new migration (M="message")
 seed: ## Create the first admin user (interactive env: ADMIN_EMAIL/ADMIN_PASSWORD)
 	$(COMPOSE) exec backend python -m app.scripts.create_admin
 
+demo: ## One-command local simulation demo with seeded data (http://localhost:8080)
+	bash deploy/demo.sh
+
 test: ## Run backend tests
 	$(COMPOSE) exec backend pytest -q
 
