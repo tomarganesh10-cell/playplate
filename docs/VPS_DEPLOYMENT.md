@@ -2,6 +2,22 @@
 
 End-to-end production deployment of Trading Playplate.
 
+## ⚡ Fast path (one-shot bootstrap)
+
+After provisioning Docker (step 1 below, run as root), the entire first-time
+setup can be done with a single interactive command as the `playplate` user:
+
+```bash
+su - playplate
+bash <(curl -fsSL https://raw.githubusercontent.com/tomarganesh10-cell/playplate/main/deploy/bootstrap.sh)
+```
+
+It clones the repo, generates the JWT/encryption secrets, prompts for your
+Kite/Anthropic/Telegram keys, issues SSL (if DNS is ready), builds + migrates +
+starts the stack in **paper mode**, and creates the admin user. Live trading is
+left disabled — arm it explicitly later. The manual steps below explain each
+stage if you prefer to run them individually.
+
 ## 0. Provision the VPS
 
 In Hostinger, create/choose a VPS with **Ubuntu 24.04**. Note the public IPv4.
