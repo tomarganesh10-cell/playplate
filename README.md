@@ -105,6 +105,27 @@ playplate/
 
 ---
 
+## Screenshots
+
+> Captured from the app running in **simulation mode**. Numbers are synthetic
+> and for illustration only — no profit is implied or guaranteed.
+
+| Live Signals | Portfolio |
+|---|---|
+| ![Live signals](docs/screenshots/signals.png) | ![Portfolio](docs/screenshots/portfolio.png) |
+
+| Performance Analytics | Trade History |
+|---|---|
+| ![Performance](docs/screenshots/performance.png) | ![Trade history](docs/screenshots/trades.png) |
+
+Try it yourself in one command (no broker needed):
+
+```bash
+make demo        # http://localhost:8080  ·  demo@playplate.in / demo-password-123
+```
+
+---
+
 ## Quick start (local, paper-trading mode)
 
 ```bash
