@@ -56,6 +56,11 @@ class ZerodhaBroker(BrokerBase):
 
     def _token(self, symbol: str) -> int:
         if symbol not in self._instruments:
+            # Lazily download Kite's NSE instrument dump and cache it.
+            from app.broker.instruments import load_nse_equity_tokens
+
+            self._instruments = load_nse_equity_tokens(self._kite) or self._instruments
+        if symbol not in self._instruments:
             raise BrokerError(f"No instrument token mapped for {symbol}")
         return self._instruments[symbol]
 
