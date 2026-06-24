@@ -23,8 +23,31 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
+          script_stop: true
+          command_timeout: 20m
           script: |
             set -euo pipefail
-            cd ~/playplate
-            git pull --ff-only
+            REPO_URL="https://github.com/${{ github.repository }}"
+            APP_DIR="$HOME/playplate"
+
+            # First run: clone if the working copy doesn't exist yet.
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "==> First deploy: cloning $REPO_URL"
+              git clone "$REPO_URL" "$APP_DIR"
+            fi
+            cd "$APP_DIR"
+
+            echo "==> Fetching latest main"
+            git fetch --all --prune
+            git checkout main
+            git reset --hard origin/main
+
+            # Secrets are NOT managed by CI. The .env must be created once,
+            # manually, on the VPS (see docs/VPS_DEPLOYMENT.md).
+            if [ ! -f .env ]; then
+              echo "ERROR: ~/playplate/.env not found on the VPS." >&2
+              echo "Create it once (cp .env.example .env && fill secrets), then re-run." >&2
+              exit 1
+            fi
+
             bash deploy/deploy.sh --with-monitoring
