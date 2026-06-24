@@ -1,0 +1,44 @@
+groups:
+  - name: playplate-trading
+    rules:
+      - alert: BackendDown
+        expr: up{job="playplate-backend"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Backend is down"
+          description: "The Playplate backend has been unreachable for over 1 minute."
+
+      - alert: CircuitBreakerTripped
+        expr: playplate_circuit_breaker_tripped == 1
+        for: 0m
+        labels: { severity: warning }
+        annotations:
+          summary: "Trading circuit breaker tripped"
+          description: "New order entry is halted. Investigate daily loss / drawdown."
+
+      - alert: BrokerSessionInvalid
+        expr: playplate_broker_session_valid == 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Broker session invalid"
+          description: "Kite session is invalid/expired. Re-run the broker login flow."
+
+      - alert: DailyLossBreached
+        expr: playplate_daily_pnl_inr < -5000
+        for: 0m
+        labels: { severity: critical }
+        annotations:
+          summary: "Daily loss limit breached"
+          description: "Daily PnL has fallen below the configured loss limit."
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(playplate_http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(playplate_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Elevated 5xx error rate"
+          description: "More than 5% of requests are returning server errors."

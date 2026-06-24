@@ -1,0 +1,85 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "title": "Trading Playplate Overview",
+  "uid": "playplate-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Daily PnL (INR)",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "playplate_daily_pnl_inr" }],
+      "fieldConfig": { "defaults": { "unit": "currencyINR" } }
+    },
+    {
+      "type": "stat",
+      "title": "Open Positions",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "playplate_open_positions" }]
+    },
+    {
+      "type": "stat",
+      "title": "Circuit Breaker",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "playplate_circuit_breaker_tripped" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "OK", "color": "green" } } },
+            { "type": "value", "options": { "1": { "text": "TRIPPED", "color": "red" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Broker Session",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "playplate_broker_session_valid" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "INVALID", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "VALID", "color": "green" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP request rate by status",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "targets": [
+        { "expr": "sum by (status) (rate(playplate_http_requests_total[5m]))", "legendFormat": "{{status}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Request latency p95 (s)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(playplate_http_request_latency_seconds_bucket[5m])))", "legendFormat": "p95" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Signals generated rate",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "targets": [
+        { "expr": "sum by (side) (rate(playplate_signals_generated_total[15m]))", "legendFormat": "{{side}}" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Orders by status",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "targets": [
+        { "expr": "sum by (status) (rate(playplate_orders_total[15m]))", "legendFormat": "{{status}}" }
+      ]
+    }
+  ]
+}
