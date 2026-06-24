@@ -12,7 +12,10 @@ alembic==1.14.0
 psycopg[binary]==3.2.3
 
 # Security
-passlib[bcrypt]==1.7.4
+passlib==1.7.4
+# Pin bcrypt to 4.0.x: passlib 1.7.4 crashes on bcrypt >=4.1 during its
+# backend self-test ("password cannot be longer than 72 bytes").
+bcrypt==4.0.1
 pyjwt==2.10.1
 cryptography==44.0.0
 
