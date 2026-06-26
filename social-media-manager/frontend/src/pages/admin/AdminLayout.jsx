@@ -1,12 +1,13 @@
 import React from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { LayoutDashboard, Key, Database, Settings, LogOut, Shield } from 'lucide-react'
+import { LayoutDashboard, Key, Database, Settings, LogOut, Shield, DollarSign } from 'lucide-react'
 
 const navItems = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/admin/credentials', label: 'API Credentials', icon: Key },
   { to: '/admin/knowledge-base', label: 'Knowledge Base', icon: Database },
+  { to: '/admin/pricing', label: 'Video Pricing', icon: DollarSign },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 

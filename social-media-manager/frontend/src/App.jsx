@@ -8,6 +8,7 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminCredentials from './pages/admin/AdminCredentials'
 import AdminKnowledgeBase from './pages/admin/AdminKnowledgeBase'
 import AdminSettings from './pages/admin/AdminSettings'
+import AdminPricing from './pages/admin/AdminPricing'
 
 import ClientLayout from './pages/client/ClientLayout'
 import ClientDashboard from './pages/client/ClientDashboard'
@@ -43,6 +44,7 @@ export default function App() {
           <Route index element={<AdminDashboard />} />
           <Route path="credentials" element={<AdminCredentials />} />
           <Route path="knowledge-base" element={<AdminKnowledgeBase />} />
+          <Route path="pricing" element={<AdminPricing />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
 

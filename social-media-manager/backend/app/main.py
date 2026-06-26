@@ -7,7 +7,7 @@ import os
 
 from app.config import settings
 from app.database import init_db
-from app.routers import auth, content, knowledge_base, credentials, analytics
+from app.routers import auth, content, knowledge_base, credentials, analytics, pricing
 
 
 @asynccontextmanager
@@ -88,6 +88,7 @@ app.include_router(content.router, prefix="/api")
 app.include_router(knowledge_base.router, prefix="/api")
 app.include_router(credentials.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
+app.include_router(pricing.router, prefix="/api")
 
 
 @app.get("/api/health")
