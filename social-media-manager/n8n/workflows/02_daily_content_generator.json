@@ -1,0 +1,98 @@
+{
+  "name": "02 — Daily Content Generator (9:00 AM IST)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 30 3 * * *" }]
+        }
+      },
+      "id": "daily-trigger",
+      "name": "Daily 9:00 AM IST",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [100, 300],
+      "notes": "9:00 AM IST = 3:30 AM UTC"
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/content/generate/daily",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $vars.API_TOKEN }}" }]
+        }
+      },
+      "id": "trigger-generation",
+      "name": "Trigger Daily Generation",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [320, 300]
+    },
+    {
+      "parameters": { "amount": 120, "unit": "seconds" },
+      "id": "wait-generation",
+      "name": "Wait 2 Minutes",
+      "type": "n8n-nodes-base.wait",
+      "position": [540, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/content/?status=pending_approval&limit=20",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $vars.API_TOKEN }}" }]
+        }
+      },
+      "id": "get-pending",
+      "name": "Get Pending Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $json.body || {};\nconst items = response.items || [];\nconst total = response.total || 0;\n\nreturn [{\n  json: {\n    total_generated: total,\n    posts: items.filter(i => !i.content_type.includes('reel') && !i.content_type.includes('short')).length,\n    videos: items.filter(i => i.content_type.includes('reel') || i.content_type.includes('short')).length,\n    batch_id: items[0]?.batch_id || 'unknown',\n    dashboard_url: 'https://social.playplate.in/client/approval',\n    generated_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "format-summary",
+      "name": "Format Summary",
+      "type": "n8n-nodes-base.code",
+      "position": [980, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "dr.anshu@chandigarhdentist.com",
+        "subject": "=🦷 {{ $json.posts }} Posts + {{ $json.videos }} Videos Ready — Playplate SMM",
+        "emailType": "html",
+        "message": "=<h2>Daily Content Ready!</h2><p>Good morning Dr. Anshu Gupta!</p><p>Your AI has generated today's content:</p><ul><li>✅ {{ $json.posts }} Social Posts</li><li>🎬 {{ $json.videos }} Video Scripts</li></ul><p><a href=\"{{ $json.dashboard_url }}?batch={{ $json.batch_id }}\">👆 Click here to review and approve</a></p><p>Takes less than 5 minutes!</p>"
+      },
+      "id": "send-email",
+      "name": "Send Approval Email",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "from": "={{ $vars.WHATSAPP_FROM }}",
+        "to": "={{ $vars.DOCTOR_WHATSAPP }}",
+        "body": "=🦷 *Daily Content Ready!*\n\nDr. Anshu Gupta, your AI has generated:\n\n✅ {{ $json.posts }} Social Posts\n🎬 {{ $json.videos }} Video Scripts\n\nReview here:\n{{ $json.dashboard_url }}"
+      },
+      "id": "send-whatsapp",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.twilio",
+      "position": [1200, 400]
+    }
+  ],
+  "connections": {
+    "Daily 9:00 AM IST": { "main": [[{ "node": "Trigger Daily Generation", "type": "main", "index": 0 }]] },
+    "Trigger Daily Generation": { "main": [[{ "node": "Wait 2 Minutes", "type": "main", "index": 0 }]] },
+    "Wait 2 Minutes": { "main": [[{ "node": "Get Pending Content", "type": "main", "index": 0 }]] },
+    "Get Pending Content": { "main": [[{ "node": "Format Summary", "type": "main", "index": 0 }]] },
+    "Format Summary": {
+      "main": [[
+        { "node": "Send Approval Email", "type": "main", "index": 0 },
+        { "node": "Send WhatsApp", "type": "main", "index": 0 }
+      ]]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}

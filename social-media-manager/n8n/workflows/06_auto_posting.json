@@ -1,0 +1,141 @@
+{
+  "name": "06 — Auto Posting (Approved Content)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 30 3 */2 * *" }]
+        }
+      },
+      "id": "posting-trigger",
+      "name": "Alternate Day Posting (9AM IST)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [100, 300],
+      "notes": "Posts every alternate day. 9AM IST = 3:30 AM UTC"
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/content/?status=approved&limit=5",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $vars.API_TOKEN }}" }]
+        }
+      },
+      "id": "get-approved",
+      "name": "Get Approved Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [320, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $json.body || {};\nconst items = response.items || [];\n\nif (items.length === 0) {\n  return [{ json: { skip: true, message: 'No approved content to post' } }];\n}\n\n// Pick first approved item\nconst item = items[0];\nreturn [{ json: { ...item, has_content: true } }];"
+      },
+      "id": "pick-content",
+      "name": "Pick Content to Post",
+      "type": "n8n-nodes-base.code",
+      "position": [540, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{ $json.has_content }}", "value2": true }]
+        }
+      },
+      "id": "check-content",
+      "name": "Has Content?",
+      "type": "n8n-nodes-base.if",
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v19.0/{{ $vars.INSTAGRAM_BUSINESS_ID }}/media",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "image_url", "value": "={{ $json.image_url }}" },
+            { "name": "caption", "value": "={{ $json.caption }} {{ $json.hashtags.join(' ') }}" },
+            { "name": "access_token", "value": "={{ $vars.META_ACCESS_TOKEN }}" }
+          ]
+        }
+      },
+      "id": "post-instagram",
+      "name": "Post to Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [980, 200]
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v19.0/{{ $vars.FACEBOOK_PAGE_ID }}/photos",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "url", "value": "={{ $json.image_url }}" },
+            { "name": "message", "value": "={{ $json.caption }} {{ $json.hashtags.slice(0,10).join(' ') }}" },
+            { "name": "access_token", "value": "={{ $vars.META_ACCESS_TOKEN }}" }
+          ]
+        }
+      },
+      "id": "post-facebook",
+      "name": "Post to Facebook",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [980, 400]
+    },
+    {
+      "parameters": {
+        "url": "https://api.linkedin.com/v2/ugcPosts",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $vars.LINKEDIN_ACCESS_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"author\": \"urn:li:person:{{ $vars.LINKEDIN_PERSON_ID }}\",\n  \"lifecycleState\": \"PUBLISHED\",\n  \"specificContent\": {\n    \"com.linkedin.ugc.ShareContent\": {\n      \"shareCommentary\": { \"text\": \"{{ $json.caption }}\" },\n      \"shareMediaCategory\": \"NONE\"\n    }\n  },\n  \"visibility\": { \"com.linkedin.ugc.MemberNetworkVisibility\": \"PUBLIC\" }\n}"
+      },
+      "id": "post-linkedin",
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [980, 600]
+    },
+    {
+      "parameters": {
+        "url": "=http://backend:8000/api/content/{{ $('Pick Content to Post').item.json.id }}/approve",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $vars.API_TOKEN }}" }]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [{ "name": "action", "value": "publish_complete" }]
+        }
+      },
+      "id": "mark-published",
+      "name": "Mark as Published",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1200, 400]
+    }
+  ],
+  "connections": {
+    "Alternate Day Posting (9AM IST)": { "main": [[{ "node": "Get Approved Content", "type": "main", "index": 0 }]] },
+    "Get Approved Content": { "main": [[{ "node": "Pick Content to Post", "type": "main", "index": 0 }]] },
+    "Pick Content to Post": { "main": [[{ "node": "Has Content?", "type": "main", "index": 0 }]] },
+    "Has Content?": {
+      "main": [
+        [
+          { "node": "Post to Instagram", "type": "main", "index": 0 },
+          { "node": "Post to Facebook", "type": "main", "index": 0 },
+          { "node": "Post to LinkedIn", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "Post to Instagram": { "main": [[{ "node": "Mark as Published", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

@@ -1,0 +1,78 @@
+{
+  "name": "01 — Website Scraper & Knowledge Base Builder",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "weeks", "weeksInterval": 1, "triggerAtDay": [1] }] } },
+      "id": "schedule-trigger",
+      "name": "Weekly Schedule (Monday)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://www.chandigarhdentist.com",
+        "options": { "response": { "response": { "responseFormat": "text" } } }
+      },
+      "id": "http-home",
+      "name": "Fetch Homepage",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [320, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $input.first().json.data;\nconst cheerio = require('cheerio');\nconst $ = cheerio.load(html);\n\nconst pages = [\n  'https://www.chandigarhdentist.com',\n  'https://www.chandigarhdentist.com/about',\n  'https://www.chandigarhdentist.com/services',\n  'https://www.chandigarhdentist.com/treatments',\n  'https://www.chandigarhdentist.com/testimonials',\n  'https://www.chandigarhdentist.com/contact',\n  'https://www.chandigarhdentist.com/faq'\n];\n\nreturn pages.map(url => ({ json: { url } }));"
+      },
+      "id": "extract-urls",
+      "name": "Extract URLs",
+      "type": "n8n-nodes-base.code",
+      "position": [540, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {}
+      },
+      "id": "fetch-pages",
+      "name": "Fetch Each Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $json.data || '';\nconst url = $json.url || '';\n\n// Simple text extraction\nconst text = html\n  .replace(/<script[^>]*>.*?<\\/script>/gs, '')\n  .replace(/<style[^>]*>.*?<\\/style>/gs, '')\n  .replace(/<nav[^>]*>.*?<\\/nav>/gs, '')\n  .replace(/<footer[^>]*>.*?<\\/footer>/gs, '')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/\\s+/g, ' ')\n  .trim()\n  .substring(0, 3000);\n\nconst categoryMap = {\n  'about': 'about_doctor',\n  'services': 'services',\n  'treatments': 'treatments',\n  'testimonials': 'testimonials',\n  'contact': 'clinic_info',\n  'faq': 'faqs'\n};\n\nlet category = 'general';\nfor (const [key, cat] of Object.entries(categoryMap)) {\n  if (url.includes(key)) { category = cat; break; }\n}\n\nreturn [{ json: { url, category, content: text, title: `${category} — ${url}`, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "parse-content",
+      "name": "Parse Page Content",
+      "type": "n8n-nodes-base.code",
+      "position": [980, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/knowledge-base/",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "Bearer {{ $vars.API_TOKEN }}" }] },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "category", "value": "={{ $json.category }}" },
+            { "name": "title", "value": "={{ $json.title }}" },
+            { "name": "content", "value": "={{ $json.content }}" },
+            { "name": "source_url", "value": "={{ $json.url }}" }
+          ]
+        }
+      },
+      "id": "save-to-api",
+      "name": "Save to Knowledge Base",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1200, 300]
+    }
+  ],
+  "connections": {
+    "Weekly Schedule (Monday)": { "main": [[{ "node": "Fetch Homepage", "type": "main", "index": 0 }]] },
+    "Fetch Homepage": { "main": [[{ "node": "Extract URLs", "type": "main", "index": 0 }]] },
+    "Extract URLs": { "main": [[{ "node": "Fetch Each Page", "type": "main", "index": 0 }]] },
+    "Fetch Each Page": { "main": [[{ "node": "Parse Page Content", "type": "main", "index": 0 }]] },
+    "Parse Page Content": { "main": [[{ "node": "Save to Knowledge Base", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}
