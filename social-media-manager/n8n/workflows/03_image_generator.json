@@ -1,0 +1,108 @@
+{
+  "name": "03 — Image Generator (DALL-E 3 via OpenAI)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 45 3 * * *" }]
+        }
+      },
+      "id": "img-trigger",
+      "name": "Trigger 9:15 AM IST",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [100, 300],
+      "notes": "9:15 AM IST = 3:45 AM UTC — runs after daily content generation"
+    },
+
+    {
+      "parameters": {
+        "url": "http://backend:8000/api/content/?status=pending_approval&limit=20",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $vars.API_TOKEN }}" }]
+        }
+      },
+      "id": "get-content",
+      "name": "Get Pending Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [320, 300]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const response = $json.body || {};\nconst items = (response.items || []).filter(i =>\n  !i.image_url && i.image_prompt\n);\nreturn items.map(item => ({\n  json: {\n    content_id: item.id,\n    image_prompt: item.image_prompt,\n    content_type: item.content_type,\n    platform: item.platform\n  }\n}));"
+      },
+      "id": "filter-items",
+      "name": "Filter Items Needing Images",
+      "type": "n8n-nodes-base.code",
+      "position": [540, 300]
+    },
+
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/images/generations",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{ $vars.OPENAI_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "dall-e-3",
+          "prompt": "={{ $json.image_prompt }} — professional dental clinic photography, clean white aesthetic, Chandigarh India, Instagram-ready, high quality",
+          "n": 1,
+          "size": "1024x1024",
+          "quality": "hd",
+          "response_format": "url"
+        }
+      },
+      "id": "dalle3-generate",
+      "name": "DALL-E 3 Generate Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [760, 300],
+      "notes": "Tool name: HTTP Request → POST → https://api.openai.com/v1/images/generations\nModel: dall-e-3 | Size: 1024x1024 | Quality: hd"
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const contentId = $('Filter Items Needing Images').item.json.content_id;\nconst imageUrl = $json.body?.data?.[0]?.url || '';\nreturn [{ json: { content_id: contentId, image_url: imageUrl } }];"
+      },
+      "id": "extract-url",
+      "name": "Extract Image URL",
+      "type": "n8n-nodes-base.code",
+      "position": [980, 300]
+    },
+
+    {
+      "parameters": {
+        "url": "=http://backend:8000/api/content/{{ $json.content_id }}/image",
+        "method": "PATCH",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Authorization", "value": "Bearer {{ $vars.API_TOKEN }}" }]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "image_url": "={{ $json.image_url }}"
+        }
+      },
+      "id": "save-image",
+      "name": "Save Image URL to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1200, 300]
+    }
+  ],
+  "connections": {
+    "Trigger 9:15 AM IST": { "main": [[{ "node": "Get Pending Content", "type": "main", "index": 0 }]] },
+    "Get Pending Content": { "main": [[{ "node": "Filter Items Needing Images", "type": "main", "index": 0 }]] },
+    "Filter Items Needing Images": { "main": [[{ "node": "DALL-E 3 Generate Image", "type": "main", "index": 0 }]] },
+    "DALL-E 3 Generate Image": { "main": [[{ "node": "Extract Image URL", "type": "main", "index": 0 }]] },
+    "Extract Image URL": { "main": [[{ "node": "Save Image URL to Backend", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}
