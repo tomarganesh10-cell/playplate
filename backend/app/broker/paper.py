@@ -53,6 +53,11 @@ class SimulationBroker(BrokerBase):
     def historical_ohlcv(self, symbol: str, interval: str, days: int) -> pd.DataFrame:
         return _synthetic_ohlcv(symbol, interval, days)
 
+    def get_index_quote(self, index: str) -> Quote:
+        # Synthetic index level, clearly not a real market value.
+        q = self.get_quote(f"IDX-{index.upper()}")
+        return Quote(index.upper(), q.last_price * 25, q.timestamp)
+
     def place_order(self, symbol, side, quantity, order_type="MARKET", limit_price=None) -> OrderAck:
         price = limit_price or self.get_quote(symbol).last_price
         oid = f"SIM-{int(datetime.now().timestamp())}-{random.randint(1000, 9999)}"
@@ -84,6 +89,11 @@ class PaperBroker(SimulationBroker):
         if self._data:
             return self._data.historical_ohlcv(symbol, interval, days)
         return super().historical_ohlcv(symbol, interval, days)
+
+    def get_index_quote(self, index: str) -> Quote:
+        if self._data:
+            return self._data.get_index_quote(index)
+        return super().get_index_quote(index)
 
     def place_order(self, symbol, side, quantity, order_type="MARKET", limit_price=None) -> OrderAck:
         base = limit_price or self.get_quote(symbol).last_price

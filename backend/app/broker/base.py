@@ -39,11 +39,23 @@ class BrokerBase(abc.ABC):
     name: str = "base"
     is_live: bool = False
 
+    # Exchange-qualified quote keys for major Indian indices.
+    INDEX_MAP: dict[str, str] = {
+        "NIFTY": "NSE:NIFTY 50",
+        "BANKNIFTY": "NSE:NIFTY BANK",
+        "SENSEX": "BSE:SENSEX",
+        "FINNIFTY": "NSE:NIFTY FIN SERVICE",
+    }
+
     @abc.abstractmethod
     def is_session_valid(self) -> bool: ...
 
     @abc.abstractmethod
     def get_quote(self, symbol: str) -> Quote: ...
+
+    def get_index_quote(self, index: str) -> Quote:
+        """Quote for a market index (NIFTY/SENSEX/...). Override per broker."""
+        raise BrokerError(f"Index quotes not supported by broker '{self.name}'")
 
     @abc.abstractmethod
     def historical_ohlcv(

@@ -7,6 +7,8 @@ from app.api.routes import (
     backtest,
     broker,
     health,
+    market,
+    ml,
     performance,
     portfolio,
     signals,
@@ -22,4 +24,6 @@ api_router.include_router(portfolio.router, prefix="/portfolio", tags=["portfoli
 api_router.include_router(performance.router, prefix="/performance", tags=["performance"])
 api_router.include_router(broker.router, prefix="/broker", tags=["broker"])
 api_router.include_router(backtest.router, prefix="/backtest", tags=["backtest"])
+api_router.include_router(market.router, prefix="/market", tags=["market"])
+api_router.include_router(ml.router, prefix="/ml", tags=["ml"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])

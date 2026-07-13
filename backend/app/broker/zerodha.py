@@ -54,7 +54,17 @@ class ZerodhaBroker(BrokerBase):
             log.warning("Kite session invalid: %s", exc)
             return False
 
+    # Kite instrument tokens for major indices (stable, documented values).
+    INDEX_TOKENS = {
+        "NIFTY": 256265,       # NSE:NIFTY 50
+        "BANKNIFTY": 260105,   # NSE:NIFTY BANK
+        "SENSEX": 265,         # BSE:SENSEX
+        "FINNIFTY": 257801,    # NSE:NIFTY FIN SERVICE
+    }
+
     def _token(self, symbol: str) -> int:
+        if symbol in self.INDEX_TOKENS:
+            return self.INDEX_TOKENS[symbol]
         if symbol not in self._instruments:
             # Lazily download Kite's NSE instrument dump and cache it.
             from app.broker.instruments import load_nse_equity_tokens
@@ -70,6 +80,14 @@ class ZerodhaBroker(BrokerBase):
         key = f"NSE:{symbol}"
         data = self._kite.quote([key])[key]
         return Quote(symbol, float(data["last_price"]), datetime.now(UTC))
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=8))
+    def get_index_quote(self, index: str) -> Quote:
+        key = self.INDEX_MAP.get(index.upper())
+        if not key:
+            raise BrokerError(f"Unknown index '{index}'")
+        data = self._kite.quote([key])[key]
+        return Quote(index.upper(), float(data["last_price"]), datetime.now(UTC))
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=8))
     def historical_ohlcv(self, symbol: str, interval: str, days: int) -> pd.DataFrame:
