@@ -66,4 +66,9 @@ export const api = {
   closeTrade: (id) => request(`/trades/${id}/close`, { method: 'POST' }),
   performance: (days = 30) => request(`/performance/?days=${days}`),
   health: () => request('/health/ready', { auth: false }),
+  brokerStatus: () => request('/broker/status'),
+  brokerLoginUrl: () => request('/broker/login-url'),
+  brokerSession: (request_token) =>
+    request('/broker/session', { method: 'POST', body: { request_token } }),
+  indices: () => request('/market/indices'),
 };
