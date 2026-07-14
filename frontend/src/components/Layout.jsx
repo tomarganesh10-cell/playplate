@@ -8,6 +8,7 @@ const NAV = [
   { to: '/portfolio', label: 'Portfolio' },
   { to: '/trades', label: 'Trade History' },
   { to: '/performance', label: 'Performance' },
+  { to: '/broker', label: 'Broker' },
 ];
 
 export default function Layout() {
