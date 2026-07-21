@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 # One-shot first-time bootstrap for Trading Playplate on a fresh VPS.
 #
-# Run as the (non-root) `playplate` user AFTER deploy/setup_vps.sh has installed
+# Run as a user in the `docker` group AFTER deploy/setup_vps.sh has installed
 # Docker. It will:
 #   1. clone/update the repo,
 #   2. generate JWT + encryption secrets and prompt for the few keys it needs,
-#   3. (optionally) issue the Let's Encrypt certificate,
-#   4. build + migrate + start the full stack (paper mode — SAFE by default),
-#   5. create the first admin user.
+#   3. build + migrate + start the full stack (paper mode — SAFE by default),
+#      -> the site is immediately reachable over HTTP on the VPS IP,
+#   4. create the first admin user,
+#   5. optionally issue an HTTPS certificate (only once DNS is ready).
 #
-# Live (real-money) trading is intentionally NOT enabled here. Validate in
-# paper mode first, then arm it explicitly (see the end of this script's output
-# and docs/VPS_DEPLOYMENT.md).
+# Live (real-money) trading is intentionally NOT enabled here.
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/tomarganesh10-cell/playplate}"
@@ -39,11 +38,11 @@ else
   cp .env.example .env
   JWT="$(openssl rand -hex 32)"
   FERNET="$(python3 -c 'from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())')"
-  echo "Enter the values below (input for secrets is hidden):"
+  echo "Enter the values below (input for secrets is hidden). Press Enter to skip optional ones."
   PG_PASS="$(asks 'PostgreSQL password (choose a strong one)')"
   GRAF_PASS="$(asks 'Grafana admin password')"
-  KITE_KEY="$(ask  'Zerodha Kite API key')"
-  KITE_SECRET="$(asks 'Zerodha Kite API secret')"
+  KITE_KEY="$(ask  'Zerodha Kite API key (blank to add later)')"
+  KITE_SECRET="$(asks 'Zerodha Kite API secret (blank to add later)')"
   ANTHROPIC="$(asks 'Anthropic API key (blank to skip AI)')"
   TG_TOKEN="$(asks 'Telegram bot token (blank to skip)')"
   TG_CHAT="$(ask  'Telegram chat id (blank to skip)')"
@@ -54,10 +53,10 @@ else
 import sys, re, pathlib
 jwt, fernet, pg, graf, kkey, ksec, anth, tgt, tgc, cap = sys.argv[1:11]
 vals = {
-    "JWT_SECRET_KEY": jwt, "ENCRYPTION_KEY": fernet, "POSTGRES_PASSWORD": pg,
-    "GRAFANA_ADMIN_PASSWORD": graf, "KITE_API_KEY": kkey, "KITE_API_SECRET": ksec,
-    "ANTHROPIC_API_KEY": anth, "TELEGRAM_BOT_TOKEN": tgt, "TELEGRAM_CHAT_ID": tgc,
-    "ACCOUNT_CAPITAL": cap,
+    "JWT_SECRET_KEY": jwt, "ENCRYPTION_KEY": fernet, "POSTGRES_PASSWORD": pg or "playplate_pg",
+    "GRAFANA_ADMIN_PASSWORD": graf or "playplate_grafana", "KITE_API_KEY": kkey,
+    "KITE_API_SECRET": ksec, "ANTHROPIC_API_KEY": anth, "TELEGRAM_BOT_TOKEN": tgt,
+    "TELEGRAM_CHAT_ID": tgc, "ACCOUNT_CAPITAL": cap or "200000",
     # Stay SAFE: paper trading, live routing disabled.
     "TRADING_MODE": "paper", "ALLOW_LIVE_TRADING": "false",
     "REQUIRE_ORDER_CONFIRMATION": "true",
@@ -73,23 +72,10 @@ print("  .env written (paper mode, live disabled).")
 PY
 fi
 
-bold "==> 3/5  SSL certificate"
-if [ -d "certbot/conf/live/$DOMAIN" ]; then
-  echo "Certificate already present — skipping issuance."
-else
-  ans="$(ask "Is DNS A-record for $DOMAIN pointing to this VPS and propagated? (y/N)" "N")"
-  if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-    EMAIL="$(ask 'Email for Let'\''s Encrypt' 'hopecommonersfoundation@gmail.com')"
-    LETSENCRYPT_EMAIL="$EMAIL" bash deploy/init_ssl.sh
-  else
-    echo "Skipping SSL. After DNS propagates, run: bash deploy/init_ssl.sh"
-  fi
-fi
-
-bold "==> 4/5  Building and starting the stack (paper mode)"
+bold "==> 3/5  Building and starting the stack (paper mode, HTTP)"
 bash deploy/deploy.sh --with-monitoring
 
-bold "==> 5/5  Admin user"
+bold "==> 4/5  Admin user"
 if [ "$(ask 'Create the first admin user now? (Y/n)' 'Y')" != "n" ]; then
   AE="$(ask 'Admin email')"
   AP="$(asks 'Admin password (>=10 chars)')"
@@ -97,24 +83,34 @@ if [ "$(ask 'Create the first admin user now? (Y/n)' 'Y')" != "n" ]; then
     backend python -m app.scripts.create_admin
 fi
 
+bold "==> 5/5  HTTPS (optional)"
+if [ -d "certbot/conf/live/$DOMAIN" ]; then
+  echo "Certificate already present — skipping."
+else
+  ans="$(ask "Is DNS A-record for $DOMAIN pointing to this VPS and propagated? (y/N)" "N")"
+  if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
+    EMAIL="$(ask 'Email for Let'\''s Encrypt' 'hopecommonersfoundation@gmail.com')"
+    LETSENCRYPT_EMAIL="$EMAIL" bash deploy/init_ssl.sh
+  else
+    echo "Skipping HTTPS. Set DNS later, then run: bash deploy/init_ssl.sh"
+  fi
+fi
+
+IP="$(curl -fsS -4 ifconfig.me 2>/dev/null || echo YOUR_VPS_IP)"
 cat <<EOF
 
 ============================================================
-✅ Bootstrap complete — running in PAPER mode (no real orders).
+✅ Bootstrap complete — PAPER mode (no real orders).
 
-Next:
-  1. Open https://$DOMAIN and log in.
-  2. Connect Zerodha: GET /api/broker/login-url -> Kite login ->
-     POST /api/broker/session {"request_token":"..."}  (repeat daily).
-  3. Validate signals / paper trades for at least one session.
+   Open now:   http://${IP}
+   (After HTTPS + DNS:  https://${DOMAIN})
 
-To enable CI auto-deploy: add VPS_HOST, VPS_USER, VPS_SSH_KEY GitHub secrets.
+   Log in with the admin you just created.
+   Connect Zerodha from the Broker page (or add KITE_API_KEY/SECRET to
+   .env and re-run: bash deploy/deploy.sh).
 
-🔴 To go LIVE (real money) later, edit .env:
-     TRADING_MODE=live
-     ALLOW_LIVE_TRADING=true
-   then: bash deploy/deploy.sh --with-monitoring
-   (every live order still requires a confirmation token.)
-   Risk warning: real-money trading can lose capital. No profit is guaranteed.
+🔴 Real-money LIVE later: set TRADING_MODE=live and ALLOW_LIVE_TRADING=true
+   in .env, then: bash deploy/deploy.sh --with-monitoring
+   Risk: real-money trading can lose capital. No profit is guaranteed.
 ============================================================
 EOF
