@@ -37,3 +37,7 @@ certbot/
 .idea/
 .vscode/
 *.swp
+
+# PLAYPLATE agent service
+psychology-engine/agent/.venv/
+psychology-engine/agent/**/__pycache__/
