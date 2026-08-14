@@ -57,6 +57,14 @@ class BrokerBase(abc.ABC):
         """Quote for a market index (NIFTY/SENSEX/...). Override per broker."""
         raise BrokerError(f"Index quotes not supported by broker '{self.name}'")
 
+    def quotes_with_change(self, symbols: list[str]) -> list[dict]:
+        """Batch LTP + day-change%% for many symbols (for gainers/losers).
+
+        Returns dicts: {symbol, last_price, prev_close, change_pct}.
+        Override per broker; the default is unsupported.
+        """
+        raise BrokerError(f"Batch quotes not supported by broker '{self.name}'")
+
     @abc.abstractmethod
     def historical_ohlcv(
         self, symbol: str, interval: str, days: int

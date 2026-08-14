@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import Layout from './components/Layout.jsx';
 import { useAuth } from './auth/AuthContext.jsx';
 import Login from './pages/Login.jsx';
+import Market from './pages/Market.jsx';
 import Signals from './pages/Signals.jsx';
 import Portfolio from './pages/Portfolio.jsx';
 import Trades from './pages/Trades.jsx';
@@ -46,7 +47,8 @@ export default function App() {
             </Protected>
           }
         >
-          <Route index element={<Navigate to="/signals" replace />} />
+          <Route index element={<Navigate to="/market" replace />} />
+          <Route path="market" element={<Market />} />
           <Route path="signals" element={<Signals />} />
           <Route path="portfolio" element={<Portfolio />} />
           <Route path="trades" element={<Trades />} />

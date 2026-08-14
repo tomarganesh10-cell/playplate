@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { api } from '../api/client.js';
 
 const NAV = [
+  { to: '/market', label: 'Market Watch' },
   { to: '/signals', label: 'Live Signals' },
   { to: '/portfolio', label: 'Portfolio' },
   { to: '/trades', label: 'Trade History' },

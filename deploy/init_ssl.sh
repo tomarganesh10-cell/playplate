@@ -30,10 +30,9 @@ docker compose run --rm --entrypoint "\
 echo "==> Writing HTTPS vhost and switching port 80 to redirect"
 
 # Port 80: serve ACME + redirect everything else to HTTPS.
+# NOTE: no static `upstream` blocks anywhere — they resolve at nginx startup
+# and crash-loop the container if a service is momentarily unresolvable.
 cat > infra/nginx/conf.d/trading.playplate.in.conf <<EOF
-upstream backend_upstream { server backend:8000; }
-upstream frontend_upstream { server frontend:80; }
-
 server {
   listen 80 default_server;
   server_name _;
@@ -42,12 +41,15 @@ server {
 }
 EOF
 
-# Port 443: TLS termination + proxy to the app.
+# Port 443: TLS termination + proxy to the app. Upstreams are resolved at
+# request time via Docker's embedded DNS (resolver + variable in proxy_pass).
 cat > infra/nginx/conf.d/https.conf <<EOF
 server {
   listen 443 ssl;
   http2 on;
   server_name ${DOMAIN};
+
+  resolver 127.0.0.11 valid=10s ipv6=off;
 
   ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
@@ -64,23 +66,18 @@ server {
 
   location /api/ {
     limit_req zone=api burst=40 nodelay;
-    proxy_pass http://backend_upstream;
+    set \$upstream_api backend:8000;
+    proxy_pass http://\$upstream_api;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_read_timeout 60s;
-  }
-
-  location = /metrics {
-    proxy_pass http://backend_upstream/api/metrics;
-    allow 172.16.0.0/12;
-    allow 127.0.0.1;
-    deny all;
+    proxy_read_timeout 180s;
   }
 
   location / {
-    proxy_pass http://frontend_upstream;
+    set \$upstream_web frontend:80;
+    proxy_pass http://\$upstream_web;
     proxy_set_header Host \$host;
     proxy_set_header X-Forwarded-Proto \$scheme;
   }

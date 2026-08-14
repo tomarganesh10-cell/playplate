@@ -89,6 +89,27 @@ class ZerodhaBroker(BrokerBase):
         data = self._kite.quote([key])[key]
         return Quote(index.upper(), float(data["last_price"]), datetime.now(UTC))
 
+    def quotes_with_change(self, symbols: list[str]) -> list[dict]:
+        # One batch call for the whole universe — no per-symbol retries so the
+        # movers endpoint stays fast even when the session just expired.
+        keys = [f"NSE:{s}" for s in symbols]
+        data = self._kite.quote(keys)
+        out = []
+        for sym in symbols:
+            d = data.get(f"NSE:{sym}")
+            if not d:
+                continue
+            ltp = float(d["last_price"])
+            prev = float((d.get("ohlc") or {}).get("close") or 0)
+            change = ((ltp - prev) / prev * 100) if prev else float(d.get("net_change") or 0)
+            out.append({
+                "symbol": sym,
+                "last_price": round(ltp, 2),
+                "prev_close": round(prev, 2),
+                "change_pct": round(change, 2),
+            })
+        return out
+
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, max=8))
     def historical_ohlcv(self, symbol: str, interval: str, days: int) -> pd.DataFrame:
         kite_interval = _KITE_INTERVAL[interval]
