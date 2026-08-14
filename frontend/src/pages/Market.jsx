@@ -8,7 +8,7 @@ function SourceBadge({ source }) {
   const live = source === 'zerodha';
   return (
     <span className={`src-badge ${live ? 'src-live' : 'src-demo'}`}>
-      {live ? '● LIVE · Zerodha' : '● DEMO DATA (connect Zerodha for real rates)'}
+      {live ? '● LIVE · Zerodha' : '● DEMO DATA — not real market prices'}
     </span>
   );
 }
@@ -70,6 +70,11 @@ export default function Market() {
         {indices && <SourceBadge source={indices.data_source} />}
       </div>
       {error && <div className="error">{error}</div>}
+      {indices?.data_source_reason && (
+        <div className="notice">
+          Showing demo prices — {indices.data_source_reason}.
+        </div>
+      )}
 
       <div className="ticker-strip">
         {(indices?.rates || []).map((r) => (

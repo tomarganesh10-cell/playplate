@@ -8,7 +8,21 @@ export default function Broker() {
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [diag, setDiag] = useState(null);
+  const [diagBusy, setDiagBusy] = useState(false);
   const pendingToken = sessionStorage.getItem(TOKEN_KEY);
+
+  const runDiagnostics = async () => {
+    setDiagBusy(true);
+    setError('');
+    try {
+      setDiag(await api.brokerDiagnostics());
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDiagBusy(false);
+    }
+  };
 
   const load = () => api.brokerStatus().then(setStatus).catch((e) => setError(e.message));
   useEffect(() => { load(); }, []);
@@ -89,6 +103,33 @@ export default function Broker() {
           </p>
         </div>
       )}
+
+      <div className="card">
+        <h3>Data access check</h3>
+        <p className="fineprint">
+          Logging in and receiving market data are entitled separately by Zerodha.
+          Run this to see exactly which Kite capabilities your app can use.
+        </p>
+        <button onClick={runDiagnostics} disabled={diagBusy}>
+          {diagBusy ? 'Checking…' : 'Run data access check'}
+        </button>
+        {diag && (
+          <>
+            <table className="data">
+              <thead><tr><th>Capability</th><th>Status</th></tr></thead>
+              <tbody>
+                {Object.entries(diag.checks).map(([name, r]) => (
+                  <tr key={name}>
+                    <td>{name}</td>
+                    <td className={r.ok ? 'buy' : 'sell'}>{r.ok ? 'OK' : r.error}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="notice">{diag.hint}</p>
+          </>
+        )}
+      </div>
     </section>
   );
 }

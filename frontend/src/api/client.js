@@ -67,6 +67,7 @@ export const api = {
   performance: (days = 30) => request(`/performance/?days=${days}`),
   health: () => request('/health/ready', { auth: false }),
   brokerStatus: () => request('/broker/status'),
+  brokerDiagnostics: () => request('/broker/diagnostics'),
   brokerLoginUrl: () => request('/broker/login-url'),
   brokerSession: (request_token) =>
     request('/broker/session', { method: 'POST', body: { request_token } }),
