@@ -8,14 +8,17 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.broker.base import BrokerBase, BrokerError
+from app.broker.base import BrokerBase
 from app.config import TradingMode, settings
 from app.database import get_db
 from app.deps import get_broker_dep, get_current_user
 from app.engine import market_hours
+from app.logging_config import get_logger
 from app.models.user import User
 from app.services.news import get_market_news
 from app.services.scanner_service import DEFAULT_UNIVERSE
+
+log = get_logger("api.market")
 
 router = APIRouter()
 
@@ -52,8 +55,15 @@ def indices(
                 "last_price": round(q.last_price, 2),
                 "as_of": q.timestamp.isoformat(),
             })
-        except BrokerError as exc:
+        except Exception as exc:  # noqa: BLE001 — degrade per-index, never 500
+            # Kite SDK raises its own exception types (token/permission/network),
+            # not just BrokerError. Surface the reason instead of failing the page.
+            log.warning("index quote failed for %s: %s", name, exc)
             rates.append({"index": name, "error": str(exc)})
+    if all("error" in r for r in rates) and not synthetic:
+        # Real source configured but every quote failed (expired token, missing
+        # data permission, network) — make the degradation explicit.
+        synthetic = True
 
     return {
         "market_session": market_hours.session_state(),
