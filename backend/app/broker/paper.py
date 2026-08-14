@@ -87,36 +87,49 @@ class SimulationBroker(BrokerBase):
 
 
 class PaperBroker(SimulationBroker):
-    """Paper trading: real data source injected, simulated fills w/ slippage."""
+    """Paper trading: real data source injected, simulated fills w/ slippage.
+
+    If the live data source is present but unusable (expired token, missing
+    Kite market-data subscription, network), calls fall back to synthetic data
+    and record the reason in `data_degraded` so the API can label the response
+    honestly instead of failing or silently passing fake data off as real.
+    """
 
     name = "paper"
 
     def __init__(self, data_source: BrokerBase | None = None, slippage_bps: float = 2.0):
         self._data = data_source
         self._slippage = slippage_bps / 10_000.0
+        self.data_degraded: str | None = None
+
+    def _live(self, method: str, *args):
+        """Call the live data source, or return None if it is absent/unusable."""
+        if not self._data:
+            return None
+        try:
+            return getattr(self._data, method)(*args)
+        except Exception as exc:  # noqa: BLE001 — any broker/SDK failure degrades
+            self.data_degraded = f"{type(exc).__name__}: {exc}"
+            log.warning("live data source failed on %s: %s", method, exc)
+            return None
 
     def is_session_valid(self) -> bool:
         return self._data.is_session_valid() if self._data else True
 
     def get_quote(self, symbol: str) -> Quote:
-        if self._data:
-            return self._data.get_quote(symbol)
-        return super().get_quote(symbol)
+        return self._live("get_quote", symbol) or super().get_quote(symbol)
 
     def historical_ohlcv(self, symbol: str, interval: str, days: int) -> pd.DataFrame:
-        if self._data:
-            return self._data.historical_ohlcv(symbol, interval, days)
-        return super().historical_ohlcv(symbol, interval, days)
+        df = self._live("historical_ohlcv", symbol, interval, days)
+        if df is None or df.empty:
+            return super().historical_ohlcv(symbol, interval, days)
+        return df
 
     def get_index_quote(self, index: str) -> Quote:
-        if self._data:
-            return self._data.get_index_quote(index)
-        return super().get_index_quote(index)
+        return self._live("get_index_quote", index) or super().get_index_quote(index)
 
     def quotes_with_change(self, symbols: list[str]) -> list[dict]:
-        if self._data:
-            return self._data.quotes_with_change(symbols)
-        return super().quotes_with_change(symbols)
+        return self._live("quotes_with_change", symbols) or super().quotes_with_change(symbols)
 
     def place_order(self, symbol, side, quantity, order_type="MARKET", limit_price=None) -> OrderAck:
         base = limit_price or self.get_quote(symbol).last_price

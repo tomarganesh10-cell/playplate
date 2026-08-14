@@ -93,6 +93,10 @@ table.data th { color: var(--muted); font-weight: 500; }
 .src-badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); }
 .src-live { color: var(--buy); border-color: var(--buy); }
 .src-demo { color: var(--warn); border-color: var(--warn); }
+.notice {
+  background: rgba(240,180,41,0.08); border: 1px solid var(--warn); color: var(--warn);
+  padding: 8px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 14px;
+}
 .movers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .movers-card h3 { margin-top: 0; }
 .movers-card .sym { font-weight: 600; }
