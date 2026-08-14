@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from enum import Enum
 from functools import lru_cache
+from urllib.parse import quote_plus
 
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -83,8 +84,13 @@ class Settings(BaseSettings):
     def sqlalchemy_url(self) -> str:
         if self.database_url:
             return self.database_url
+        # URL-encode credentials so passwords containing special characters
+        # (@, :, /, #, spaces, …) don't corrupt the DSN and mangle the host,
+        # which surfaces as a misleading "Name or service not known" error.
+        user = quote_plus(self.postgres_user)
+        password = quote_plus(self.postgres_password)
         return (
-            f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql+psycopg://{user}:{password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 

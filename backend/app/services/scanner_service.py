@@ -1,6 +1,8 @@
 """Orchestrates a scan: fetch data -> scan -> rank -> explain -> persist."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from sqlalchemy.orm import Session
 
 from app.ai import explain, ranking
@@ -32,13 +34,31 @@ def run_scan(
 ) -> dict:
     symbols = symbols or DEFAULT_UNIVERSE
     data = {}
-    for sym in symbols:
-        try:
-            df = broker.historical_ohlcv(sym, timeframe, days=30)
-            if len(df) >= 30:
-                data[sym] = df
-        except Exception as exc:  # noqa: BLE001
-            log.warning("data fetch failed for %s: %s", sym, exc)
+    # Fetch symbols in parallel under a hard time budget so one slow/broken
+    # data source (e.g. an expired broker session retrying per symbol) can't
+    # stall the request past the edge proxy's timeout. Whatever finished in
+    # time is scanned; the rest are skipped with a warning.
+    fetch_budget_s = 25.0
+    pool = ThreadPoolExecutor(max_workers=8)
+    futures = {
+        pool.submit(broker.historical_ohlcv, sym, timeframe, 30): sym for sym in symbols
+    }
+    try:
+        for fut in as_completed(futures, timeout=fetch_budget_s):
+            sym = futures[fut]
+            try:
+                df = fut.result()
+                if len(df) >= 30:
+                    data[sym] = df
+            except Exception as exc:  # noqa: BLE001
+                log.warning("data fetch failed for %s: %s", sym, exc)
+    except TimeoutError:
+        log.warning(
+            "scan fetch budget (%.0fs) exceeded; scanning %d/%d symbols",
+            fetch_budget_s, len(data), len(symbols),
+        )
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
     results = scan_universe(data, timeframe=timeframe)
     ranked = ranking.rank_signals(results)

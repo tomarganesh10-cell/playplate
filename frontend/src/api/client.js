@@ -71,4 +71,6 @@ export const api = {
   brokerSession: (request_token) =>
     request('/broker/session', { method: 'POST', body: { request_token } }),
   indices: () => request('/market/indices'),
+  movers: () => request('/market/movers'),
+  news: () => request('/market/news'),
 };

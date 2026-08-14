@@ -58,6 +58,24 @@ class SimulationBroker(BrokerBase):
         q = self.get_quote(f"IDX-{index.upper()}")
         return Quote(index.upper(), q.last_price * 25, q.timestamp)
 
+    def quotes_with_change(self, symbols: list[str]) -> list[dict]:
+        # Deterministic per-day synthetic change so the movers board is stable
+        # within a day but different across days. Clearly NOT market data.
+        day = datetime.now(UTC).date().isoformat()
+        out = []
+        for sym in symbols:
+            ltp = self.get_quote(sym).last_price
+            rng = random.Random(hash((sym, day)) & 0xFFFFFFFF)
+            change = round((rng.random() - 0.5) * 6, 2)  # -3% .. +3%
+            prev = ltp / (1 + change / 100) if change > -100 else ltp
+            out.append({
+                "symbol": sym,
+                "last_price": round(ltp, 2),
+                "prev_close": round(prev, 2),
+                "change_pct": change,
+            })
+        return out
+
     def place_order(self, symbol, side, quantity, order_type="MARKET", limit_price=None) -> OrderAck:
         price = limit_price or self.get_quote(symbol).last_price
         oid = f"SIM-{int(datetime.now().timestamp())}-{random.randint(1000, 9999)}"
@@ -94,6 +112,11 @@ class PaperBroker(SimulationBroker):
         if self._data:
             return self._data.get_index_quote(index)
         return super().get_index_quote(index)
+
+    def quotes_with_change(self, symbols: list[str]) -> list[dict]:
+        if self._data:
+            return self._data.quotes_with_change(symbols)
+        return super().quotes_with_change(symbols)
 
     def place_order(self, symbol, side, quantity, order_type="MARKET", limit_price=None) -> OrderAck:
         base = limit_price or self.get_quote(symbol).last_price
