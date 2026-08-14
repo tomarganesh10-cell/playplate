@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 
-from app.broker.base import BrokerBase, OrderAck, Quote
+from app.broker.base import BrokerBase, OrderAck, Quote, describe_error
 from app.logging_config import get_logger
 
 log = get_logger("broker.paper")
@@ -109,8 +109,8 @@ class PaperBroker(SimulationBroker):
         try:
             return getattr(self._data, method)(*args)
         except Exception as exc:  # noqa: BLE001 — any broker/SDK failure degrades
-            self.data_degraded = f"{type(exc).__name__}: {exc}"
-            log.warning("live data source failed on %s: %s", method, exc)
+            self.data_degraded = describe_error(exc)
+            log.warning("live data source failed on %s: %s", method, self.data_degraded)
             return None
 
     def is_session_valid(self) -> bool:

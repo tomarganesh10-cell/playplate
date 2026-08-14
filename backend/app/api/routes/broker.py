@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.broker import session as broker_session
-from app.broker.base import BrokerError
+from app.broker.base import BrokerError, describe_error
 from app.config import settings
 from app.database import get_db
 from app.deps import require_admin
@@ -89,7 +89,7 @@ def diagnostics(db: Session = Depends(get_db), _: User = Depends(require_admin))
             fn()
             checks[name] = {"ok": True}
         except Exception as exc:  # noqa: BLE001 — the failure type is the answer
-            checks[name] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+            checks[name] = {"ok": False, "error": describe_error(exc)}
 
     probe("profile", lambda: zb._kite.profile())
     probe("quote_index", lambda: zb.get_index_quote("NIFTY"))
