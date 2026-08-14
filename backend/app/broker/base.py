@@ -33,6 +33,29 @@ class BrokerError(Exception):
     pass
 
 
+def unwrap_error(exc: BaseException) -> BaseException:
+    """Return the underlying cause behind a tenacity RetryError.
+
+    Retried broker calls surface as `RetryError(<Future ... raised X>)`, which
+    hides the actual Kite exception (PermissionException, TokenException, …)
+    that tells the operator what to fix.
+    """
+    try:
+        from tenacity import RetryError
+    except ImportError:  # pragma: no cover
+        return exc
+    if isinstance(exc, RetryError):
+        attempt = exc.last_attempt
+        if attempt is not None and attempt.failed:
+            return attempt.exception() or exc
+    return exc
+
+
+def describe_error(exc: BaseException) -> str:
+    inner = unwrap_error(exc)
+    return f"{type(inner).__name__}: {inner}"
+
+
 class BrokerBase(abc.ABC):
     """All brokers expose the same surface."""
 
