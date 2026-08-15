@@ -37,3 +37,12 @@ certbot/
 .idea/
 .vscode/
 *.swp
+
+# PLAYPLATE agent service
+psychology-engine/agent/.venv/
+psychology-engine/agent/**/__pycache__/
+
+# PLAYPLATE outreach mailer — secrets & runtime outputs
+outreach/.env
+outreach/outbox/
+outreach/logs/
