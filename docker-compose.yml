@@ -56,10 +56,30 @@ services:
       - "80"
     networks: [internal]
 
+  # PLAYPLATE Psychology Engine agent — served at agent.playplate.in.
+  # Opus voice turns on automatically when ANTHROPIC_API_KEY is set in .env;
+  # without it the agent still runs on its deterministic engine.
+  agent:
+    build:
+      context: ./psychology-engine/agent
+    restart: unless-stopped
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-5-5}
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health').status==200 else sys.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks: [internal]
+
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
-    depends_on: [backend, frontend]
+    depends_on: [backend, frontend, agent]
     ports:
       - "80:80"
       - "443:443"

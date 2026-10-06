@@ -19,7 +19,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, engine
+from . import __version__, engine, llm
 from .guard import has_consent
 from .models import (
     AcceptIn, ConsentUpdate, FeedbackIn, MessageIn, MessageOut, Recommendation,
@@ -90,6 +90,13 @@ def _handle(profile: dict, text: str) -> MessageOut:
         reply = ("Got it. I can help most with food, gaming, tournaments or rewards — "
                  "which way do you want to go?")
 
+    # The engine's reply is the fallback/ground truth; Claude (Opus) rewrites it in
+    # PLAYPLATE's voice when configured. Recommendations, loyalty, consent and every
+    # guardrail stay owned by the engine — the LLM only rephrases.
+    reply = llm.generate_reply(
+        profile=profile, user_text=text, intent=intent, recs=recs, fallback=reply,
+    )
+
     return MessageOut(
         reply=reply,
         intent=intent,
@@ -103,7 +110,13 @@ def _handle(profile: dict, text: str) -> MessageOut:
 # --------------------------------------------------------------------------- #
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "service": "playplate-agent", "version": __version__}
+    return {
+        "status": "ok",
+        "service": "playplate-agent",
+        "version": __version__,
+        "voice": "claude" if llm.available() else "deterministic",
+        "model": llm.MODEL if llm.available() else None,
+    }
 
 
 @app.post("/v1/agent/message", response_model=MessageOut)
