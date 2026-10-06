@@ -1,0 +1,624 @@
+<title>PLAYPLATE AI Agent</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{
+    color-scheme: dark;
+    --bg:#0E0A16; --bg2:#151020; --bg3:#1D1630; --raise:#241A3C;
+    --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
+    --ink:#F3EEFA; --muted:#A79FC0; --faint:#6E668A;
+    --magenta:#FF2E88; --lime:#C6FF3D; --cyan:#3DE0FF;
+    --good:#46E5A0; --warn:#FFB43D; --bad:#FF5D6C;
+    --mag-soft:rgba(255,46,136,.14); --lime-soft:rgba(198,255,61,.14);
+    --font-display:"Helvetica Neue",Arial,"Segoe UI",sans-serif;
+    --font-body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --font-mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --r:14px; --r-lg:20px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--font-body);
+    line-height:1.5; min-height:100vh; overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* ambient arcade background */
+  .amb{position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden}
+  .amb::before{content:""; position:absolute; inset:-20%;
+    background:
+      radial-gradient(50% 40% at 15% 10%, rgba(255,46,136,.18), transparent 70%),
+      radial-gradient(45% 40% at 90% 20%, rgba(61,224,255,.12), transparent 70%),
+      radial-gradient(50% 45% at 70% 100%, rgba(198,255,61,.10), transparent 70%);
+    filter:blur(10px);
+  }
+  .amb::after{content:""; position:absolute; inset:0; opacity:.5;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:46px 46px; mask-image:radial-gradient(circle at 50% 40%,#000,transparent 85%);
+  }
+  .wrap{position:relative; z-index:1; max-width:1180px; margin:0 auto; padding:22px 20px 40px}
+
+  /* top bar */
+  .top{display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:22px}
+  .brand{display:flex; align-items:baseline; gap:12px}
+  .logo{font-family:var(--font-display); font-weight:800; letter-spacing:.02em; font-size:26px;
+    line-height:1; text-transform:uppercase}
+  .logo .p{color:var(--magenta)} .logo .l{color:var(--lime)}
+  .tag{font-family:var(--font-mono); font-size:11px; letter-spacing:.28em; color:var(--muted); text-transform:uppercase}
+  .live{margin-left:auto; display:flex; align-items:center; gap:8px; font-family:var(--font-mono);
+    font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--muted);
+    border:1px solid var(--line2); border-radius:999px; padding:6px 12px; background:rgba(255,255,255,.03)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 0 0 rgba(70,229,160,.6);animation:pulse 2.2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(70,229,160,.55)}70%{box-shadow:0 0 0 7px rgba(70,229,160,0)}100%{box-shadow:0 0 0 0 rgba(70,229,160,0)}}
+
+  /* layout */
+  .grid{display:grid; grid-template-columns:1.5fr 1fr; gap:18px; align-items:start}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+
+  .panel{background:linear-gradient(180deg,var(--bg2),var(--bg)); border:1px solid var(--line);
+    border-radius:var(--r-lg); overflow:hidden}
+  .panel-h{display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--line)}
+  .panel-h .k{font-family:var(--font-mono); font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--faint)}
+
+  /* agent header */
+  .agent-top{display:flex; align-items:center; gap:14px; padding:16px}
+  .orb{width:56px; height:56px; border-radius:16px; flex:none; display:grid; place-items:center;
+    font-size:28px; position:relative; background:radial-gradient(120% 120% at 30% 20%,var(--raise),var(--bg3));
+    border:1px solid var(--line2); box-shadow:0 0 26px rgba(255,46,136,.22)}
+  .orb.think{animation:bob 1.6s ease-in-out infinite}
+  @keyframes bob{50%{transform:translateY(-3px)}}
+  .agent-id{display:flex; flex-direction:column; gap:3px; min-width:0}
+  .agent-name{font-family:var(--font-display); font-weight:800; font-size:17px; letter-spacing:.01em}
+  .agent-sub{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted)}
+  .ai-badge{color:var(--cyan)}
+  .switch{margin-left:auto; display:flex; gap:6px}
+  .av-btn{font-size:16px; width:34px; height:34px; border-radius:10px; border:1px solid var(--line2);
+    background:var(--bg3); cursor:pointer; display:grid; place-items:center; transition:.15s}
+  .av-btn[aria-pressed="true"]{border-color:var(--magenta); box-shadow:0 0 0 1px var(--magenta) inset; background:var(--mag-soft)}
+  .av-btn:hover{transform:translateY(-1px)}
+
+  /* chat */
+  .stream{padding:6px 16px 4px; height:min(46vh,420px); overflow-y:auto; display:flex; flex-direction:column; gap:12px}
+  .stream::-webkit-scrollbar{width:8px}.stream::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
+  .msg{max-width:86%; padding:11px 14px; border-radius:14px; font-size:14.5px; animation:rise .28s ease both}
+  @keyframes rise{from{opacity:0; transform:translateY(6px)}}
+  .msg.bot{align-self:flex-start; background:var(--bg3); border:1px solid var(--line); border-top-left-radius:5px}
+  .msg.me{align-self:flex-end; background:linear-gradient(180deg,var(--magenta),#e01f76); color:#fff; border-top-right-radius:5px}
+  .msg.sys{align-self:center; background:transparent; border:1px dashed var(--line2); color:var(--muted);
+    font-family:var(--font-mono); font-size:11px; letter-spacing:.06em; padding:6px 12px; text-align:center; max-width:92%}
+  .msg b{color:var(--lime); font-weight:700}
+  .msg.me b{color:#fff; text-decoration:underline}
+  .typing{display:inline-flex; gap:4px; align-items:center}
+  .typing i{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:tp 1.1s infinite}
+  .typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+  @keyframes tp{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+
+  /* rec cards inside chat */
+  .recs{align-self:flex-start; display:flex; flex-direction:column; gap:8px; width:86%}
+  .rec{background:var(--bg2); border:1px solid var(--line2); border-radius:13px; padding:11px 12px;
+    display:flex; gap:11px; align-items:center; animation:rise .3s ease both}
+  .rec .ic{font-size:22px; width:40px; height:40px; border-radius:10px; display:grid; place-items:center;
+    background:var(--bg3); border:1px solid var(--line); flex:none}
+  .rec .body{flex:1; min-width:0}
+  .rec .nm{font-weight:700; font-size:14px}
+  .rec .why{font-size:11.5px; color:var(--muted); margin-top:2px}
+  .rec .why em{color:var(--lime); font-style:normal}
+  .rec .pr{font-family:var(--font-mono); font-size:12px; color:var(--ink); margin-top:3px}
+  .rec .act{display:flex; flex-direction:column; gap:5px}
+  .mini{font-family:var(--font-mono); font-size:11px; letter-spacing:.04em; border-radius:8px; padding:6px 9px;
+    cursor:pointer; border:1px solid var(--line2); background:var(--bg3); color:var(--ink); transition:.15s; white-space:nowrap}
+  .mini.go{border-color:var(--lime); color:var(--lime)} .mini.go:hover{background:var(--lime-soft)}
+  .mini.no:hover{color:var(--muted)}
+
+  /* input zone */
+  .quick{display:flex; gap:8px; flex-wrap:wrap; padding:10px 16px 2px}
+  .chip{font-size:13px; border:1px solid var(--line2); background:var(--bg3); color:var(--ink);
+    border-radius:999px; padding:7px 13px; cursor:pointer; transition:.15s}
+  .chip:hover{border-color:var(--magenta); background:var(--mag-soft); transform:translateY(-1px)}
+  .inbar{display:flex; gap:8px; padding:12px 16px 16px; align-items:center}
+  .inbar input{flex:1; background:var(--bg); border:1px solid var(--line2); color:var(--ink);
+    border-radius:12px; padding:12px 14px; font-size:14.5px; font-family:var(--font-body); outline:none}
+  .inbar input:focus{border-color:var(--magenta); box-shadow:0 0 0 3px var(--mag-soft)}
+  .send{background:linear-gradient(180deg,var(--magenta),#e01f76); color:#fff; border:none; border-radius:12px;
+    width:46px; height:46px; font-size:18px; cursor:pointer; flex:none; transition:.15s}
+  .send:hover{filter:brightness(1.08); transform:translateY(-1px)}
+
+  /* brain panel */
+  .stack{display:flex; flex-direction:column; gap:18px}
+  .b-sec{padding:14px 16px}
+  .b-sec + .b-sec{border-top:1px solid var(--line)}
+  .b-title{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--faint); margin-bottom:11px; display:flex; align-items:center; gap:8px}
+  .b-title .id{color:var(--magenta)}
+
+  .meter{margin-bottom:11px}
+  .meter .lab{display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px}
+  .meter .lab .v{font-family:var(--font-mono); color:var(--muted); font-variant-numeric:tabular-nums}
+  .track{height:8px; border-radius:6px; background:var(--bg3); overflow:hidden; border:1px solid var(--line)}
+  .fill{height:100%; width:50%; border-radius:6px; transition:width .6s cubic-bezier(.2,.7,.2,1), background .4s}
+
+  .kv{display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:5px 0}
+  .kv .key{color:var(--muted)} .kv .val{font-family:var(--font-mono); font-variant-numeric:tabular-nums; text-align:right}
+  .tagrow{display:flex; gap:6px; flex-wrap:wrap; margin-top:4px}
+  .pill{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.05em; padding:4px 9px; border-radius:999px;
+    border:1px solid var(--line2); background:var(--bg3); color:var(--muted)}
+  .pill.hot{color:var(--magenta); border-color:var(--magenta)}
+  .pill.eat{color:var(--lime); border-color:rgba(198,255,61,.5)}
+  .empty{color:var(--faint); font-size:12px; font-style:italic}
+
+  /* loyalty HUD */
+  .hud{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .stat{background:var(--bg3); border:1px solid var(--line); border-radius:12px; padding:10px 12px}
+  .stat .n{font-family:var(--font-mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--faint)}
+  .stat .big{font-family:var(--font-display); font-weight:800; font-size:22px; margin-top:2px; font-variant-numeric:tabular-nums}
+  .stat.coin .big{color:var(--lime)} .stat.lvl .big{color:var(--magenta)}
+  .stat .sub{font-size:11px; color:var(--muted); margin-top:1px}
+  .bump{animation:bump .5s ease}
+  @keyframes bump{30%{transform:scale(1.14)}}
+  .xpwrap{grid-column:1/-1}
+  .streak{grid-column:1/-1; display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--muted)}
+  .streak b{color:var(--warn)}
+
+  /* consent */
+  .consent{display:flex; align-items:center; gap:12px}
+  .toggle{--on:0; width:46px; height:26px; border-radius:999px; border:1px solid var(--line2); background:var(--bg3);
+    position:relative; cursor:pointer; flex:none; transition:.2s}
+  .toggle[aria-checked="true"]{background:var(--lime-soft); border-color:var(--lime)}
+  .knob{position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%; background:var(--muted); transition:.2s}
+  .toggle[aria-checked="true"] .knob{transform:translateX(20px); background:var(--lime)}
+  .consent .txt{font-size:12.5px; color:var(--muted)} .consent .txt b{color:var(--ink)}
+
+  .feedback{display:flex; gap:8px; margin-top:2px}
+  .emo{font-size:20px; width:40px; height:40px; border-radius:11px; border:1px solid var(--line2); background:var(--bg3);
+    cursor:pointer; transition:.15s} .emo:hover{transform:translateY(-2px) scale(1.05); border-color:var(--magenta)}
+
+  .foot{margin-top:22px; text-align:center; font-family:var(--font-mono); font-size:10.5px; letter-spacing:.1em;
+    color:var(--faint); line-height:1.9}
+  .foot b{color:var(--muted)}
+  a{color:var(--cyan)}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+</style>
+
+<div class="amb" aria-hidden="true"></div>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="logo"><span class="p">PLAY</span><span class="l">PLATE</span></div>
+      <div class="tag">Eat • Play • Repeat</div>
+    </div>
+    <div class="live"><span class="dot"></span> Agent live</div>
+  </header>
+
+  <div class="grid">
+    <!-- CONVERSATION -->
+    <section class="panel" aria-label="PLAYPLATE AI agent conversation">
+      <div class="agent-top">
+        <div class="orb" id="orb">🤖</div>
+        <div class="agent-id">
+          <div class="agent-name" id="agentName">PIP · your PLAYPLATE agent</div>
+          <div class="agent-sub"><span class="ai-badge">● AI assistant</span> — not a human</div>
+        </div>
+        <div class="switch" role="group" aria-label="Choose avatar style">
+          <button class="av-btn" data-av="robot" aria-pressed="true" title="Robot">🤖</button>
+          <button class="av-btn" data-av="anime" aria-pressed="false" title="Anime">🌟</button>
+          <button class="av-btn" data-av="guide" aria-pressed="false" title="Guide">🧭</button>
+        </div>
+      </div>
+
+      <div class="stream" id="stream" aria-live="polite"></div>
+
+      <div class="quick" id="quick"></div>
+
+      <form class="inbar" id="form" autocomplete="off">
+        <input id="input" placeholder="Tell PIP what you're in the mood for…" aria-label="Message the agent" />
+        <button class="send" type="submit" aria-label="Send">➜</button>
+      </form>
+    </section>
+
+    <!-- THE BRAIN -->
+    <aside class="stack">
+      <section class="panel">
+        <div class="panel-h"><span class="k">The Brain — Customer 360</span></div>
+
+        <div class="b-sec">
+          <div class="b-title"><span class="id">◈</span> Live read (consented)</div>
+          <div class="meter">
+            <div class="lab"><span>Visit mood</span><span class="v" id="moodV">neutral</span></div>
+            <div class="track"><div class="fill" id="moodF" style="width:55%;background:var(--muted)"></div></div>
+          </div>
+          <div class="kv"><span class="key">Decision style</span><span class="val" id="dstyle">—</span></div>
+          <div class="kv"><span class="key">Likely intent</span><span class="val" id="intent">arriving</span></div>
+          <div style="margin-top:8px">
+            <div class="b-title" style="margin-bottom:6px"><span class="id" style="color:var(--lime)">◈</span> Favourites learned</div>
+            <div class="tagrow" id="favs"><span class="empty">nothing yet — say hi 👋</span></div>
+          </div>
+        </div>
+
+        <div class="b-sec">
+          <div class="b-title"><span class="id">▲</span> Loyalty layer</div>
+          <div class="hud">
+            <div class="stat lvl"><div class="n">Level</div><div class="big" id="lvl">1</div><div class="sub" id="lvlName">Rookie</div></div>
+            <div class="stat coin"><div class="n">Coins</div><div class="big" id="coins">0</div><div class="sub">earn by playing</div></div>
+            <div class="xpwrap meter" style="margin:2px 0 0">
+              <div class="lab"><span>XP to next level</span><span class="v" id="xpV">0 / 100</span></div>
+              <div class="track"><div class="fill" id="xpF" style="width:0%;background:linear-gradient(90deg,var(--magenta),var(--lime))"></div></div>
+            </div>
+            <div class="streak">🔥 Streak <b id="streak">1</b> visit <span style="color:var(--faint)">· grace 10 days</span></div>
+          </div>
+        </div>
+
+        <div class="b-sec">
+          <div class="b-title"><span class="id" style="color:var(--cyan)">✦</span> How was it?</div>
+          <div class="feedback" id="feedback" role="group" aria-label="Give feedback">
+            <button class="emo" data-m="1" title="Loved it">😄</button>
+            <button class="emo" data-m="0.4" title="Good">🙂</button>
+            <button class="emo" data-m="-0.2" title="Meh">😐</button>
+            <button class="emo" data-m="-0.8" title="Bad">🙁</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-h"><span class="k">Privacy — you're in control</span></div>
+        <div class="b-sec consent">
+          <div class="toggle" id="consent" role="switch" aria-checked="true" tabindex="0" aria-label="Personalization"><span class="knob"></span></div>
+          <div class="txt"><b>Personalization is ON.</b> PIP remembers your favourites to help. Flip it off — service stays great, PIP just goes generic. Nothing sensitive is ever used.</div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <div class="foot">
+    <div><b>PLAYPLATE Psychology Engine</b> — live agent demo · runs entirely in your browser</div>
+    <div>Consent-first · behaviour not identity · clearly an AI · no dark patterns</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(s){return document.querySelector(s)};
+  var stream=$("#stream"), quick=$("#quick");
+
+  // ---------- STATE (the Customer 360) ----------
+  var S={
+    avatar:"robot", consent:true,
+    mood:0.1, coins:0, xp:0, level:1, streak:1,
+    favFood:[], favGame:[], decisions:[], intent:"arriving",
+    playing:null, greeted:false, offered:{}
+  };
+  var LEVELS=["Rookie","Player","Pro","Legend","Creator"];
+  var XP_STEP=100;
+
+  // ---------- CATALOG ----------
+  var FOOD=[
+    {id:"paneer",nm:"Smoky Peri-Peri Paneer",ic:"🌶️",pr:"₹240",tags:["spicy","hero","share"],gaming:true},
+    {id:"nachos",nm:"Loaded Nachos",ic:"🧀",pr:"₹210",tags:["share","snack"],gaming:true},
+    {id:"slider",nm:"Truffle Mushroom Sliders",ic:"🍔",pr:"₹260",tags:["hero","meal"],gaming:true},
+    {id:"fries",nm:"Masala Peri Fries",ic:"🍟",pr:"₹140",tags:["snack","share"],gaming:true},
+    {id:"wrap",nm:"Paneer Tikka Wrap",ic:"🌯",pr:"₹190",tags:["meal","onehand"],gaming:true},
+    {id:"lava",nm:"Belgian Choco Lava",ic:"🍫",pr:"₹180",tags:["dessert","celebrate"],gaming:false},
+    {id:"coldbrew",nm:"Signature Cold Brew",ic:"🧊",pr:"₹160",tags:["drink","coffee"],gaming:true},
+    {id:"cortado",nm:"Iced Cortado",ic:"☕",pr:"₹150",tags:["drink","coffee","winddown"],gaming:false},
+    {id:"filter",nm:"South Filter Coffee",ic:"☕",pr:"₹90",tags:["drink","coffee","morning"],gaming:false}
+  ];
+  var GAMES=[
+    {id:"fc25",nm:"EA FC 25 (PS5)",ic:"⚽",pr:"₹200/hr",plat:"ps5",tags:["squad","sports"]},
+    {id:"tekken",nm:"Tekken 8 (PS5)",ic:"🥋",pr:"₹200/hr",plat:"ps5",tags:["versus","competitive"]},
+    {id:"valorant",nm:"Valorant (Gaming PC)",ic:"🎯",pr:"₹180/hr",plat:"pc",tags:["squad","competitive"]},
+    {id:"beatsaber",nm:"Beat Saber (VR)",ic:"🕶️",pr:"₹250/hr",plat:"vr",tags:["active","solo"]},
+    {id:"f1sim",nm:"F1 Racing Sim",ic:"🏎️",pr:"₹300/hr",plat:"sim",tags:["thrill","solo"]},
+    {id:"godofwar",nm:"God of War (PS5)",ic:"🪓",pr:"₹200/hr",plat:"ps5",tags:["story","solo"]}
+  ];
+
+  // ---------- TONE (per avatar) ----------
+  var TONE={
+    robot:{name:"PIP · your PLAYPLATE agent", face:"🤖",
+      hi:"Booting up — hi! I'm <b>PIP</b>, PLAYPLATE's AI agent. Fair warning: I'm a bot, and proud of it. What are we doing today — <b>eat</b>, <b>play</b>, or both?"},
+    anime:{name:"Pixie · your PLAYPLATE buddy", face:"🌟",
+      hi:"Heyyy!! ✨ I'm <b>Pixie</b>, your PLAYPLATE AI buddy (yes, I'm an AI!). Ready to level up your visit? Tell me — <b>hungry</b>, wanna <b>game</b>, or just vibing?"},
+    guide:{name:"Guide · your PLAYPLATE host", face:"🧭",
+      hi:"Welcome to PLAYPLATE. I'm your <b>AI guide</b> — here to help you eat well and play well. Where shall we start: <b>food</b>, <b>gaming</b>, or a look around?"}
+  };
+  function say(kind){ // small tone helpers
+    var a=S.avatar;
+    var lib={
+      nice:{robot:"Logged. ",anime:"Yasss! ",guide:"Wonderful. "},
+      ok:{robot:"Copy that. ",anime:"Ooh nice! ",guide:"Of course. "},
+      sorry:{robot:"That's on us — recalibrating. ",anime:"Aw no, I'm sorry! ",guide:"I'm sorry to hear that. "}
+    };
+    return lib[kind][a];
+  }
+
+  // ---------- RENDER HELPERS ----------
+  function scroll(){ stream.scrollTop=stream.scrollHeight; }
+  function bubble(cls,html){
+    var d=document.createElement("div"); d.className="msg "+cls; d.innerHTML=html;
+    stream.appendChild(d); scroll(); return d;
+  }
+  function sys(t){ bubble("sys",t); }
+  function typing(cb){
+    S._orb=$("#orb"); S._orb.classList.add("think");
+    var d=bubble("bot","<span class='typing'><i></i><i></i><i></i></span>");
+    setTimeout(function(){ d.remove(); S._orb.classList.remove("think"); cb(); }, 520+Math.random()*380);
+  }
+  function botSay(html){ typing(function(){ bubble("bot",html); }); }
+
+  function setQuick(list){
+    quick.innerHTML="";
+    list.forEach(function(q){
+      var b=document.createElement("button"); b.className="chip"; b.type="button"; b.textContent=q.label;
+      b.onclick=function(){ handle(q.send||q.label, true); };
+      quick.appendChild(b);
+    });
+  }
+
+  // ---------- ENGINE: intent detection ----------
+  function detect(t){
+    t=" "+t.toLowerCase()+" ";
+    var has=function(){for(var i=0;i<arguments.length;i++){if(t.indexOf(arguments[i])>-1)return true;}return false;};
+    if(has(" bye "," leaving "," heading out ")) return "bye";
+    if(has("birthday","b'day","bday")) return "birthday";
+    if(has("tournament","compete","esports","ranked")) return "tournament";
+    if(has("bored","boring","nothing to do")) return "bored";
+    if(has("help","how do","what can you","confused")) return "help";
+    if(has("dessert","sweet","lava","cake","choco")) return "dessert";
+    if(has("coffee","cold brew","cortado","filter","latte","cafe")) return "coffee";
+    if(has("hungry","eat","food","snack","order","paneer","nachos","fries","wrap","slider")) return "food";
+    if(has("ps5","playstation","fc","fifa","tekken","god of war")) return "play_ps5";
+    if(has("pc","valorant","cs2","counter")) return "play_pc";
+    if(has(" vr ","beat saber","virtual")) return "play_vr";
+    if(has("sim","racing","f1","race")) return "play_sim";
+    if(has("play","game","gaming","squad","friends")) return "play";
+    if(has("chill","relax","vibe","hang","nothing")) return "chill";
+    if(has("hi","hey","hello","yo","sup","namaste")) return "greet";
+    if(has("thanks","thank you","great","awesome","love")) return "thanks";
+    return "unknown";
+  }
+
+  // ---------- ENGINE: decision-style inference ----------
+  function noteDecision(kind){ // 'fast' | 'browse' | 'social' | 'habit'
+    S.decisions.push(kind); if(S.decisions.length>6) S.decisions.shift();
+    var c={fast:0,browse:0,social:0,habit:0}; S.decisions.forEach(function(k){c[k]++});
+    var top=Object.keys(c).sort(function(a,b){return c[b]-c[a]})[0];
+    var map={fast:"Satisficer — wants a great pick fast",browse:"Maximiser — likes options",
+             social:"Social — follows the squad",habit:"Habitual — loves the usual"};
+    S.dstyleLabel = S.decisions.length>=2 ? map[top] : "learning…";
+  }
+
+  // ---------- ENGINE: recommender ----------
+  function timeCtx(){ var h=new Date().getHours();
+    if(h>=5&&h<11) return "morning"; if(h>=11&&h<16) return "afternoon";
+    if(h>=16&&h<22) return "evening"; return "late"; }
+
+  function recFood(kind){
+    var ctx=timeCtx(), pool=FOOD.slice(), out=[];
+    pool.forEach(function(it){
+      var sc=Math.random()*0.4, why=[];
+      if(kind==="dessert" && it.tags.indexOf("dessert")>-1){sc+=3; why.push("a sweet finish");}
+      if(kind==="coffee" && it.tags.indexOf("coffee")>-1){sc+=3; why.push("your coffee mood");}
+      if(S.playing && it.gaming){sc+=1.4; why.push("one-handed for your <em>"+S.playing+"</em> session");}
+      if(S.consent && S.favFood.indexOf(it.id)>-1){sc+=2.2; why.push("you loved it before");}
+      if(ctx==="morning" && it.tags.indexOf("morning")>-1){sc+=1; why.push("perfect for mornings");}
+      if(ctx==="evening" && it.tags.indexOf("share")>-1){sc+=0.8; why.push("great to share tonight");}
+      if(it.tags.indexOf("hero")>-1){sc+=0.9;}
+      if(!why.length){ why.push(it.tags.indexOf("share")>-1?"popular tonight":"a house favourite"); }
+      out.push({it:it,sc:sc,why:why[0]});
+    });
+    out.sort(function(a,b){return b.sc-a.sc});
+    return out.slice(0, kind==="dessert"||kind==="coffee"?2:3);
+  }
+  function recGames(plat){
+    var pool=GAMES.filter(function(g){return plat?g.plat===plat:true}), out=[];
+    if(!pool.length) pool=GAMES.slice();
+    pool.forEach(function(g){
+      var sc=Math.random()*0.4, why=[];
+      if(S.consent && S.favGame.indexOf(g.id)>-1){sc+=2.2; why.push("you've played it here before");}
+      if(g.tags.indexOf("squad")>-1){sc+=0.9; why.push("perfect with your squad");}
+      if(g.tags.indexOf("competitive")>-1){sc+=0.6; why.push("skill-matched, casual ladder tonight");}
+      if(!why.length) why.push("trending on the floor right now");
+      out.push({g:g,sc:sc,why:why[0]});
+    });
+    out.sort(function(a,b){return b.sc-a.sc});
+    return out.slice(0,3);
+  }
+
+  function showFoodRecs(list){
+    typing(function(){
+      var wrap=document.createElement("div"); wrap.className="recs";
+      list.forEach(function(r){
+        var el=document.createElement("div"); el.className="rec";
+        el.innerHTML='<div class="ic">'+r.it.ic+'</div><div class="body"><div class="nm">'+r.it.nm+
+          '</div><div class="why">Because <em>'+r.why+'</em></div><div class="pr">'+r.it.pr+'</div></div>'+
+          '<div class="act"><button class="mini go">Add ＋</button><button class="mini no">No</button></div>';
+        el.querySelector(".go").onclick=function(){ accept("food",r.it); el.querySelector(".act").innerHTML='<span class="mini go" style="cursor:default">Added ✓</span>'; };
+        el.querySelector(".no").onclick=function(){ el.style.opacity=".4"; el.querySelector(".act").innerHTML='<span class="mini no" style="cursor:default">skipped</span>'; };
+        wrap.appendChild(el);
+      });
+      stream.appendChild(wrap); scroll();
+    });
+  }
+  function showGameRecs(list){
+    typing(function(){
+      var wrap=document.createElement("div"); wrap.className="recs";
+      list.forEach(function(r){
+        var el=document.createElement("div"); el.className="rec";
+        el.innerHTML='<div class="ic">'+r.g.ic+'</div><div class="body"><div class="nm">'+r.g.nm+
+          '</div><div class="why">Because <em>'+r.why+'</em></div><div class="pr">'+r.g.pr+'</div></div>'+
+          '<div class="act"><button class="mini go">Book</button><button class="mini no">No</button></div>';
+        el.querySelector(".go").onclick=function(){ accept("game",r.g); el.querySelector(".act").innerHTML='<span class="mini go" style="cursor:default">Booked ✓</span>'; };
+        el.querySelector(".no").onclick=function(){ el.style.opacity=".4"; el.querySelector(".act").innerHTML='<span class="mini no" style="cursor:default">skipped</span>'; };
+        wrap.appendChild(el);
+      });
+      stream.appendChild(wrap); scroll();
+    });
+  }
+
+  // ---------- ENGINE: accept / rewards ----------
+  function accept(type,item){
+    noteDecision("fast");
+    if(type==="food"){ if(S.favFood.indexOf(item.id)<0) S.favFood.push(item.id); reward(15,20,"Nice pick"); mood(0.25); }
+    else { if(S.favGame.indexOf(item.id)<0) S.favGame.push(item.id); S.playing=item.nm.split(" (")[0]; reward(25,30,"Session booked"); mood(0.3);
+      botSay(say("nice")+"You're set on <b>"+item.nm+"</b>. Want a one-handed snack to go with it? Just say <b>food</b>."); }
+    render();
+  }
+  function reward(c,x,note){
+    S.coins+=c; S.xp+=x;
+    while(S.xp>=XP_STEP && S.level<LEVELS.length){ S.xp-=XP_STEP; S.level++;
+      sys("★ LEVEL UP — you're now "+LEVELS[S.level-1]+"!"); }
+    sys("＋"+c+" coins · ＋"+x+" XP — "+note);
+    bumpEl($("#coins")); bumpEl($("#lvl"));
+  }
+  function bumpEl(el){ el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); }
+  function mood(d){ S.mood=Math.max(-1,Math.min(1,S.mood+d)); }
+
+  // ---------- MAIN HANDLER ----------
+  function handle(text, fromChip){
+    text=(text||"").trim(); if(!text) return;
+    bubble("me", esc(text));
+    quick.innerHTML="";
+    var it=detect(text);
+    S.intent = ({food:"ordering",dessert:"celebrating",coffee:"winding down",play:"here to play",
+      play_ps5:"PS5 session",play_pc:"PC session",play_vr:"VR session",play_sim:"racing",
+      chill:"relaxing",birthday:"celebrating 🎂",tournament:"competing",bored:"needs a spark"})[it] || S.intent;
+
+    switch(it){
+      case "greet":
+        botSay(say("ok")+"Good to see you. Are we here to <b>eat</b>, <b>play</b>, or a bit of both?");
+        setQuick([{label:"I'm hungry 🍔",send:"I'm hungry"},{label:"Let's play 🎮",send:"I want to play"},{label:"Both!",send:"both"}]);
+        break;
+      case "food": case "dessert": case "coffee":
+        noteDecision(fromChip?"fast":"browse");
+        botSay(personalizeIntro(it));
+        showFoodRecs(recFood(it)); mood(0.1);
+        setQuick([{label:"Something to play 🎮",send:"I want to play"},{label:"Dessert 🍫",send:"dessert"},{label:"A coffee ☕",send:"coffee"}]);
+        break;
+      case "play": case "play_ps5": case "play_pc": case "play_vr": case "play_sim":
+        noteDecision(text.indexOf("squad")>-1||text.indexOf("friend")>-1?"social":"browse");
+        var plat={play_ps5:"ps5",play_pc:"pc",play_vr:"vr",play_sim:"sim"}[it]||null;
+        botSay((plat?say("nice")+"Great choice. ":say("ok"))+"Here's what's hot"+(plat?"":" on the floor")+" — pick one and I'll hold a station:");
+        showGameRecs(recGames(plat)); mood(0.15);
+        setQuick([{label:"Add snacks 🍟",send:"food"},{label:"Join a tournament 🏆",send:"tournament"},{label:"Squad game",send:"play with squad"}]);
+        break;
+      case "tournament":
+        botSay(say("nice")+"There's a <b>casual ladder at 8pm</b> — skill-matched so it stays fun, not brutal. Want me to reserve you a slot? (＋big XP for joining.)");
+        setQuick([{label:"Reserve my slot",send:"reserve tournament"},{label:"Maybe later",send:"later"}]);
+        if(text.indexOf("reserve")>-1){ reward(40,50,"Tournament slot held"); mood(0.3); }
+        break;
+      case "birthday":
+        botSay("🎂 Happy birthday!! Since you told me, here's a <b>free Belgian Choco Lava</b> on the house — no strings. Want me to set up a squad table so your crew can celebrate?");
+        reward(50,40,"Birthday gift unlocked"); mood(0.4);
+        setQuick([{label:"Yes, squad table!",send:"book squad table"},{label:"Just the dessert 🍫",send:"dessert"}]);
+        break;
+      case "bored":
+        botSay(say("ok")+"Let's fix that. Quick spark: try <b>Beat Saber in VR</b> (gets the heart going) or jump the <b>8pm casual ladder</b>. Want me to line one up?");
+        setQuick([{label:"VR it is 🕶️",send:"vr"},{label:"Casual ladder 🏆",send:"tournament"}]);
+        break;
+      case "chill":
+        botSay(say("ok")+"Chill mode it is. Grab the lounge, an <b>iced cortado</b>, and an easy story game like <b>God of War</b>. Want the coffee, the game, or both?");
+        setQuick([{label:"Coffee ☕",send:"coffee"},{label:"Story game 🪓",send:"god of war"},{label:"Both",send:"both chill"}]);
+        break;
+      case "help":
+        botSay("I'm your PLAYPLATE agent — I can <b>recommend food & games</b>, <b>book stations</b>, run your <b>rewards</b>, and remember your favourites (only if you let me — see the privacy toggle). Try: <i>\"I want a spicy snack and a squad game.\"</i>");
+        setQuick([{label:"Food 🍔",send:"hungry"},{label:"Games 🎮",send:"play"},{label:"My rewards ▲",send:"rewards"}]);
+        break;
+      case "thanks":
+        botSay(say("nice")+"Anytime. I'm here whenever you need a pick. ✨ Enjoy PLAYPLATE!");
+        break;
+      case "bye":
+        botSay("Thanks for coming by! You leave as <b>"+LEVELS[S.level-1]+"</b> with <b>"+S.coins+" coins</b>. Same squad, same energy next time? See you soon. 👋");
+        sys("Visit ended · come back within your streak grace to keep the 🔥");
+        break;
+      default:
+        botSay("Got it — <i>"+esc(text)+"</i>. I can help most with <b>food</b>, <b>gaming</b>, <b>tournaments</b> or <b>rewards</b>. Which way do you want to go?");
+        setQuick([{label:"Food 🍔",send:"hungry"},{label:"Play 🎮",send:"play"},{label:"Surprise me ✨",send:"I'm bored"}]);
+    }
+    render();
+  }
+
+  function personalizeIntro(it){
+    if(!S.consent) return "Here are some crowd favourites (personalization's off, so these are our popular picks — still great!):";
+    if(it==="dessert") return say("nice")+"Sweet tooth mode. A couple that always land:";
+    if(it==="coffee") return say("nice")+"Coffee bar's calling. Try these:";
+    var known=S.favFood.length? " I remembered what you like — ":" ";
+    return say("nice")+"On it."+known+"here's your <b>For You</b>:";
+  }
+
+  function esc(s){return s.replace(/[&<>"]/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c];});}
+
+  // ---------- RENDER THE BRAIN ----------
+  function render(){
+    // mood
+    var m=S.mood, pct=Math.round((m+1)/2*100);
+    var mf=$("#moodF"); mf.style.width=pct+"%";
+    var col = m>0.5?"var(--good)": m>0.05?"var(--lime)": m>-0.25?"var(--muted)": m>-0.6?"var(--warn)":"var(--bad)";
+    mf.style.background=col;
+    $("#moodV").textContent = m>0.5?"delighted": m>0.05?"happy": m>-0.25?"neutral": m>-0.6?"unsettled":"upset";
+    // style/intent
+    $("#dstyle").textContent = S.consent ? (S.dstyleLabel||"learning…") : "— (paused)";
+    $("#intent").textContent = S.intent;
+    // favourites
+    var favs=$("#favs");
+    if(!S.consent){ favs.innerHTML='<span class="empty">personalization paused</span>'; }
+    else if(!S.favFood.length && !S.favGame.length){ favs.innerHTML='<span class="empty">nothing yet — order or book something</span>'; }
+    else{
+      favs.innerHTML="";
+      S.favGame.forEach(function(id){var g=byId(GAMES,id); if(g){var s=mk("pill hot",g.ic+" "+g.nm.split(" (")[0]); favs.appendChild(s);}});
+      S.favFood.forEach(function(id){var f=byId(FOOD,id); if(f){var s=mk("pill eat",f.ic+" "+f.nm.split(" ")[0]+"…"); favs.appendChild(s);}});
+    }
+    // loyalty
+    $("#lvl").textContent=S.level; $("#lvlName").textContent=LEVELS[S.level-1];
+    $("#coins").textContent=S.coins;
+    $("#xpV").textContent=S.xp+" / "+XP_STEP; $("#xpF").style.width=Math.round(S.xp/XP_STEP*100)+"%";
+    $("#streak").textContent=S.streak;
+  }
+  function byId(arr,id){for(var i=0;i<arr.length;i++)if(arr[i].id===id)return arr[i];return null;}
+  function mk(cls,txt){var s=document.createElement("span");s.className=cls;s.textContent=txt;return s;}
+
+  // ---------- AVATAR SWITCH ----------
+  document.querySelectorAll(".av-btn").forEach(function(b){
+    b.onclick=function(){
+      document.querySelectorAll(".av-btn").forEach(function(x){x.setAttribute("aria-pressed","false")});
+      b.setAttribute("aria-pressed","true"); S.avatar=b.dataset.av;
+      var t=TONE[S.avatar]; $("#agentName").textContent=t.name; $("#orb").textContent=t.face;
+      sys("Avatar switched — same me, new vibe.");
+      botSay("Switched! Still your PLAYPLATE agent, just a different look. What's next — <b>eat</b> or <b>play</b>?");
+    };
+  });
+
+  // ---------- CONSENT ----------
+  var consent=$("#consent");
+  function toggleConsent(){
+    S.consent=!S.consent; consent.setAttribute("aria-checked",String(S.consent));
+    consent.nextElementSibling.innerHTML = S.consent
+      ? "<b>Personalization is ON.</b> PIP remembers your favourites to help. Flip it off — service stays great, PIP just goes generic. Nothing sensitive is ever used."
+      : "<b>Personalization is OFF.</b> PIP won't use your history — you still get our best generic service. Your data isn't deleted; flip back anytime.";
+    sys(S.consent?"Consent ON — personalization resumed 🔒":"Consent OFF — running generic (still great) 🔒");
+    render();
+  }
+  consent.onclick=toggleConsent;
+  consent.onkeydown=function(e){ if(e.key===" "||e.key==="Enter"){e.preventDefault(); toggleConsent();} };
+
+  // ---------- FEEDBACK ----------
+  document.querySelectorAll(".emo").forEach(function(b){
+    b.onclick=function(){
+      var m=parseFloat(b.dataset.m); mood(m>0?0.5:-0.7); noteDecision("fast");
+      if(m>0){ botSay(say("nice")+"Love that! ＋a little bonus for the feedback."); reward(10,10,"Thanks for the feedback"); }
+      else{ botSay(say("sorry")+"Thank you for telling me — I'm flagging this to a human on the floor right now, and your next drink's on us. 🙏 <i>(service recovery)</i>"); sys("→ Routed to staff · recovery offer issued"); }
+      render();
+    };
+  });
+
+  // ---------- INPUT ----------
+  $("#form").addEventListener("submit",function(e){ e.preventDefault();
+    var v=$("#input").value; $("#input").value=""; handle(v,false); });
+
+  // ---------- BOOT ----------
+  function boot(){
+    sys("PLAYPLATE Psychology Engine · agent session started");
+    var t=TONE[S.avatar];
+    typing(function(){ bubble("bot",t.hi); });
+    setQuick([{label:"I'm hungry 🍔",send:"I'm hungry"},{label:"Let's play 🎮",send:"I want to play"},
+      {label:"It's my birthday 🎂",send:"it's my birthday"},{label:"Just chilling 😌",send:"just chilling"}]);
+    render();
+  }
+  boot();
+})();
+</script>
